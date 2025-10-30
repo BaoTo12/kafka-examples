@@ -22,5 +22,33 @@
             <groupId>org.apache.kafka</groupId>
             <artifactId>kafka-clients</artifactId>
         </dependency>
+
+        <!-- Jackson Core (bộ xử lý JSON cơ bản) -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-core</artifactId>
+            <version>2.17.2</version>
+        </dependency>
+
+        <!-- Jackson Databind (ObjectMapper, @JsonTypeInfo, v.v.) -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+            <version>2.17.2</version>
+        </dependency>
+
+        <!-- Jackson Annotations (chứa các annotation như @JsonTypeInfo, @JsonSubTypes, @JsonProperty) -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-annotations</artifactId>
+            <version>2.17.2</version>
+        </dependency>
+
+        <!-- https://mvnrepository.com/artifact/com.obsidiandynamics.fulcrum/fulcrum-worker -->
+        <dependency>
+            <groupId>com.obsidiandynamics.fulcrum</groupId>
+            <artifactId>fulcrum-worker</artifactId>
+            <version>0.39.0</version>
+        </dependency>
     </dependencies>
 </project>

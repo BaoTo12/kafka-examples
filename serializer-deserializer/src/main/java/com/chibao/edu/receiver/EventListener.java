@@ -1,4 +1,6 @@
 package com.chibao.edu.receiver;
 
-public class EventListener {
+@FunctionalInterface
+public interface EventListener {
+    void onEvent(ReceivedEvent event);
 }

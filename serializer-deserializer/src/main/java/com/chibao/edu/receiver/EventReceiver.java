@@ -1,4 +1,11 @@
 package com.chibao.edu.receiver;
 
-public class EventReceiver {
+import java.io.Closeable;
+
+public interface EventReceiver extends Closeable {
+    void addListener(EventListener listener);
+    void start();
+
+    @Override
+    void close();
 }
