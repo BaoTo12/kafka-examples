@@ -17,12 +17,17 @@
     <packaging>pom</packaging>
     <modules>
         <module>serializer-deserializer</module>
+        <module>robust-configuration</module>
     </modules>
 
     <properties>
         <maven.compiler.source>21</maven.compiler.source>
         <maven.compiler.target>21</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <fulcrum-worker.version>0.39.0</fulcrum-worker.version>
+        <jackson-databind.veriosn>2.17.2</jackson-databind.veriosn>
+        <jackson-annotations.veriosn>2.17.2</jackson-annotations.veriosn>
+        <jackson-core.veriosn>2.17.2</jackson-core.veriosn>
     </properties>
 
     <dependencyManagement>
@@ -33,14 +38,37 @@
                 <artifactId>kafka-clients</artifactId>
                 <version>4.1.0</version>
             </dependency>
+            <dependency>
+                <groupId>com.fasterxml.jackson.core</groupId>
+                <artifactId>jackson-core</artifactId>
+                <version>${jackson-core.veriosn}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.obsidiandynamics.fulcrum</groupId>
+                <artifactId>fulcrum-worker</artifactId>
+                <version>${fulcrum-worker.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>com.fasterxml.jackson.core</groupId>
+                <artifactId>jackson-databind</artifactId>
+                <version>${jackson-databind.veriosn}</version>
+            </dependency>
+
+            <!-- Jackson Annotations (chứa các annotation như @JsonTypeInfo, @JsonSubTypes, @JsonProperty) -->
+            <dependency>
+                <groupId>com.fasterxml.jackson.core</groupId>
+                <artifactId>jackson-annotations</artifactId>
+                <version>${jackson-annotations.veriosn}</version>
+            </dependency>
         </dependencies>
     </dependencyManagement>
 
-<!--    <dependencies>-->
-<!--        <dependency>-->
-<!--            <groupId>org.projectlombok</groupId>-->
-<!--            <artifactId>lombok</artifactId>-->
-<!--            <version>1.18.40</version>-->
-<!--        </dependency>-->
-<!--    </dependencies>-->
+    <dependencies>
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <version>1.18.40</version>
+        </dependency>
+    </dependencies>
 </project>

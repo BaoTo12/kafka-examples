@@ -1,0 +1,143 @@
+package com.chibao.edu;
+
+
+import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.common.config.SaslConfigs;
+import org.apache.kafka.common.config.SecurityConfig;
+import org.apache.kafka.common.config.SslConfigs;
+import org.apache.kafka.common.serialization.Serializer;
+
+import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
+import java.util.*;
+import java.util.stream.Collectors;
+
+import static java.util.function.Predicate.not;
+
+public final class TypesafeProducerConfig {
+    public static final class UnsupportedPropertyException extends RuntimeException {
+        private static final long serialVersionUID = 1L;
+
+        private UnsupportedPropertyException(String s) {
+            super(s);
+        }
+    }
+
+    public static final class ConflictingPropertyException extends RuntimeException {
+        private static final long serialVersionUID = 1L;
+
+        private ConflictingPropertyException(String s) {
+            super(s);
+        }
+    }
+
+    private String bootstrapServers;
+
+    private Class<? extends Serializer<?>> keySerializerClass;
+
+    private Class<? extends Serializer<?>> valueSerializerClass;
+
+    private final Map<String, Object> customEntries = new HashMap<>();
+
+    public TypesafeProducerConfig withBootstrapServers(String bootstrapServers) {
+        this.bootstrapServers = bootstrapServers;
+        return this;
+    }
+
+    public TypesafeProducerConfig withKeySerializerClass(Class<? extends Serializer<?>> keySerializerClass) {
+        this.keySerializerClass = keySerializerClass;
+        return this;
+    }
+
+    public TypesafeProducerConfig withValueSerializerClass(Class<? extends Serializer<?>> valueSerializerClass) {
+        this.valueSerializerClass = valueSerializerClass;
+        return this;
+    }
+
+    public TypesafeProducerConfig withCustomEntry(String propertyName, Object value) {
+        Objects.requireNonNull(propertyName, "Property name cannot be null");
+        customEntries.put(propertyName, value);
+        return this;
+    }
+
+    // ! Kiểm tra custom properties có hợp lệ không
+    public Map<String, Object> mapify() {
+        final var stagingConfig = new HashMap<String, Object>();
+        if (!customEntries.isEmpty()) {
+            // ! lấy danh sách tất cả property name hợp lệ trong:
+            //ProducerConfig
+            //SaslConfigs
+            //SecurityConfig
+            // ! Dùng reflection quét qua các hằng số (static final String) trong các class đó.
+            // ? Nếu user nhập sai tên property --> mapify() sẽ ném UnsupportedPropertyException.
+            // ?
+            final var supportedKeys = scanClassesForPropertyNames(SecurityConfig.class,
+                    SslConfigs.class,
+                    SaslConfigs.class,
+                    ProducerConfig.class,
+                    CommonClientConfigs.class);
+            final var unsupportedKey = customEntries.keySet()
+                    .stream()
+                    .filter(not(supportedKeys::contains))
+                    .findAny();
+
+            if (unsupportedKey.isPresent()) {
+                throw new UnsupportedPropertyException("Unsupported property " + unsupportedKey.get());
+            }
+
+            stagingConfig.putAll(customEntries);
+        }
+        // ! Thêm các property bắt buộc
+        Objects.requireNonNull(bootstrapServers, "Bootstrap servers not set");
+        tryInsertEntry(stagingConfig, CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
+        Objects.requireNonNull(keySerializerClass, "Key serializer not set");
+        tryInsertEntry(stagingConfig, ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, keySerializerClass.getName());
+        Objects.requireNonNull(valueSerializerClass, "Value serializer not set");
+        tryInsertEntry(stagingConfig, ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, valueSerializerClass.getName());
+
+        return stagingConfig;
+    }
+
+    private static void tryInsertEntry(Map<String, Object> staging, String key, Object value) {
+        staging.compute(key, (__key, existingValue) -> {
+            if (existingValue == null) {
+                return value;
+            } else {
+                throw new ConflictingPropertyException("Property " + key + " conflicts with an expected property");
+            }
+        });
+    }
+
+    // ! lấy danh sách tất cả property name hợp lệ trong:
+    private static Set<String> scanClassesForPropertyNames(Class<?>... classes) {
+        return Arrays.stream(classes)
+                .map(Class::getFields)
+                .flatMap(Arrays::stream)
+                .filter(TypesafeProducerConfig::isFieldConstant) // static final
+                .filter(TypesafeProducerConfig::isFieldStringType) // kiểu String
+                .filter(not(TypesafeProducerConfig::isFieldDoc)) // bỏ mấy field *_DOC
+                .map(TypesafeProducerConfig::retrieveField) // lấy giá trị của hằng
+                .collect(Collectors.toSet());
+    }
+
+    private static boolean isFieldConstant(Field field) {
+        return Modifier.isFinal(field.getModifiers()) && Modifier.isStatic(field.getModifiers());
+    }
+
+    private static boolean isFieldStringType(Field field) {
+        return field.getType().equals(String.class);
+    }
+
+    private static boolean isFieldDoc(Field field) {
+        return field.getName().endsWith("_DOC");
+    }
+
+    private static String retrieveField(Field field) {
+        try {
+            return (String) field.get(null);
+        } catch (IllegalArgumentException | IllegalAccessException e) {
+            throw new RuntimeException(e);
+        }
+    }
+}
