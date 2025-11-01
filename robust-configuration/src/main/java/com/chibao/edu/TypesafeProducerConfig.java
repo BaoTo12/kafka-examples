@@ -110,6 +110,120 @@ public final class TypesafeProducerConfig {
     }
 
     // ! lấy danh sách tất cả property name hợp lệ trong:
+    // * How it works
+    /*
+    * Bước 1 — Truyền vào danh sách các class: scanClassesForPropertyNames(ProducerConfig.class);
+    * nghĩa là bạn muốn quét tất cả public static final String trong ProducerConfig.
+    * Bước 2 — Arrays.stream(classes)
+    * Chuyển mảng class đầu vào ([ProducerConfig.class]) thành Stream để xử lý tuần tự.
+        Bước 3 — .map(Class::getFields)
+        Class::getFields() trả về tất cả public field (biến static, constant, v.v.) của mỗi class.
+        Ví dụ (giả sử trong ProducerConfig có):
+           public static final String BOOTSTRAP_SERVERS_CONFIG = "bootstrap.servers";
+        public static final String KEY_SERIALIZER_CLASS_CONFIG = "key.serializer";
+        public static final String ACKS_CONFIG = "acks";
+        public static final String BOOTSTRAP_SERVERS_DOC = "docs for bootstrap";
+        * Khi gọi:
+
+        ProducerConfig.class.getFields()
+        * 👉 trả về Field[] gồm 4 phần tử (tương ứng 4 biến ở trên).
+
+        Bước 4 — .flatMap(Arrays::stream)
+
+        Nối toàn bộ Field[] từ tất cả class lại thành một luồng duy nhất (Stream<Field>).
+
+        Giả sử bạn truyền vào 3 class (ProducerConfig, SaslConfigs, SecurityConfig),
+        thì flatMap sẽ hợp tất cả các field của 3 class thành một stream duy nhất.
+
+        Bước 5 — .filter(TypesafeProducerConfig::isFieldConstant)
+
+        Giữ lại chỉ những field là hằng số (static final).
+
+        Ví dụ:
+
+        public static final String BOOTSTRAP_SERVERS_CONFIG = "bootstrap.servers";  ✅
+        public final String SOME_VAR = "abc";                                      ❌ (thiếu static)
+        public static String OTHER = "def";                                        ❌ (thiếu final)
+
+
+        Hàm isFieldConstant(Field f) kiểm tra:
+
+        Modifier.isFinal(f.getModifiers()) && Modifier.isStatic(f.getModifiers());
+
+        Bước 6 — .filter(TypesafeProducerConfig::isFieldStringType)
+
+        Giữ lại chỉ những field có kiểu String
+        (vì ta chỉ quan tâm đến tên property chứ không phải số hay kiểu khác).
+
+        Ví dụ:
+
+        public static final int DEFAULT_BUFFER_SIZE = 1024;   ❌ bị loại
+        public static final String ACKS_CONFIG = "acks";      ✅ giữ lại
+
+        Bước 7 — .filter(not(TypesafeProducerConfig::isFieldDoc))
+
+        Bỏ qua các field kết thúc bằng _DOC (chứa mô tả, không phải key thật).
+
+        Ví dụ:
+
+        public static final String BOOTSTRAP_SERVERS_CONFIG = "bootstrap.servers"; ✅
+        public static final String BOOTSTRAP_SERVERS_DOC = "..."                   ❌
+
+
+        Hàm kiểm tra:
+
+        field.getName().endsWith("_DOC")
+
+        Bước 8 — .map(TypesafeProducerConfig::retrieveField)
+
+        Lấy giá trị của field ra (thay vì đối tượng Field).
+        Dùng reflection:
+
+        field.get(null)
+
+
+        vì field là static, không cần instance.
+        Kết quả là "bootstrap.servers", "acks", "key.serializer", v.v.
+
+        Bước 9 — .collect(Collectors.toSet())
+
+        Thu thập tất cả tên property thành Set<String> (không trùng lặp).
+
+        🧠 Kết quả thực tế (ví dụ demo)
+
+        Ví dụ code chạy thử rút gọn:
+
+        import org.apache.kafka.clients.producer.ProducerConfig;
+        import java.util.*;
+
+        public class Demo {
+            public static void main(String[] args) {
+                Set<String> props = scanClassesForPropertyNames(ProducerConfig.class);
+                props.stream().limit(5).forEach(System.out::println);
+            }
+
+            private static Set<String> scanClassesForPropertyNames(Class<?>... classes) {
+                return Arrays.stream(classes)
+                    .map(Class::getFields)
+                    .flatMap(Arrays::stream)
+                    .filter(f -> Modifier.isFinal(f.getModifiers()) && Modifier.isStatic(f.getModifiers()))
+                    .filter(f -> f.getType().equals(String.class))
+                    .filter(f -> !f.getName().endsWith("_DOC"))
+                    .map(f -> {
+                        try { return (String) f.get(null); }
+                        catch (Exception e) { throw new RuntimeException(e); }
+                    })
+                    .collect(Collectors.toSet());
+            }
+        }
+        👉 Output (ví dụ)
+        bootstrap.servers
+        acks
+        key.serializer
+        value.serializer
+        buffer.memory
+    * *
+    * **/
     private static Set<String> scanClassesForPropertyNames(Class<?>... classes) {
         return Arrays.stream(classes)
                 .map(Class::getFields)
